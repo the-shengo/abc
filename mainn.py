@@ -108,5 +108,3 @@ else:
             if st.button("Delete Page"):
                 os.remove(page_path)
                 st.warning("Page deleted")
-
-            )
