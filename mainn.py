@@ -2,72 +2,111 @@ import streamlit as st
 import os
 
 PAGES_DIR = "pages"
-FILES_DIR = "files"
+MEDIA_DIR = "media"
+
+ADMIN_USER = "admin"
+ADMIN_PASS = "password123"
 
 os.makedirs(PAGES_DIR, exist_ok=True)
-os.makedirs(FILES_DIR, exist_ok=True)
+os.makedirs(MEDIA_DIR, exist_ok=True)
 
-st.title("📚 Simple Community Pages")
+# ---------------- SESSION ----------------
+if "admin" not in st.session_state:
+    st.session_state.admin = False
+
+# ---------------- LOGIN ----------------
+with st.sidebar:
+    st.title("🔐 Admin Login")
+    if not st.session_state.admin:
+        user = st.text_input("Username")
+        pwd = st.text_input("Password", type="password")
+        if st.button("Login"):
+            if user == ADMIN_USER and pwd == ADMIN_PASS:
+                st.session_state.admin = True
+                st.success("Logged in as admin")
+            else:
+                st.error("Wrong credentials")
+    else:
+        st.success("Admin mode")
+        if st.button("Logout"):
+            st.session_state.admin = False
+
+# ---------------- MENU ----------------
+st.title("📰 Simple Blog")
 
 pages = sorted(os.listdir(PAGES_DIR))
-menu = ["Home", "Create Page"] + pages
+menu = ["Home"] + pages
+
+if st.session_state.admin:
+    menu.insert(1, "Create Page")
+
 choice = st.sidebar.selectbox("Menu", menu)
 
 # ---------------- HOME ----------------
 if choice == "Home":
-    st.write("Select a page or create a new one.")
+    st.write("Welcome! Select a page from the menu.")
 
-# ---------------- CREATE PAGE ----------------
-elif choice == "Create Page":
+# ---------------- CREATE PAGE (ADMIN) ----------------
+elif choice == "Create Page" and st.session_state.admin:
     title = st.text_input("Page title")
-    content = st.text_area("Page content")
+    content = st.text_area(
+        "Markdown content",
+        height=300,
+        help="Use **bold**, *italic*, ![img](media/file.png)"
+    )
+
+    uploaded = st.file_uploader("Upload media", accept_multiple_files=True)
 
     if st.button("Save Page") and title:
-        with open(os.path.join(PAGES_DIR, title + ".txt"), "w") as f:
+        with open(os.path.join(PAGES_DIR, title + ".md"), "w") as f:
             f.write(content)
-        os.makedirs(os.path.join(FILES_DIR, title), exist_ok=True)
-        st.success("Page created!")
 
-# ---------------- VIEW / EDIT PAGE ----------------
+        if uploaded:
+            for file in uploaded:
+                with open(os.path.join(MEDIA_DIR, file.name), "wb") as f:
+                    f.write(file.getbuffer())
+
+        st.success("Page created")
+
+# ---------------- VIEW PAGE ----------------
 else:
-    page_name = choice.replace(".txt", "")
     page_path = os.path.join(PAGES_DIR, choice)
-    page_files_dir = os.path.join(FILES_DIR, page_name)
-
-    os.makedirs(page_files_dir, exist_ok=True)
 
     with open(page_path, "r") as f:
         content = f.read()
 
-    st.subheader(page_name)
+    st.markdown(content, unsafe_allow_html=True)
 
-    new_content = st.text_area("Edit page", content, height=250)
+    # ---------------- EDIT (ADMIN ONLY) ----------------
+    if st.session_state.admin:
+        st.markdown("---")
+        st.subheader("✏️ Edit page")
 
-    if st.button("Save Changes"):
-        with open(page_path, "w") as f:
-            f.write(new_content)
-        st.success("Page updated!")
+        new_content = st.text_area("Edit Markdown", content, height=300)
 
-    st.markdown("---")
-    st.subheader("📎 Attach files")
+        uploaded = st.file_uploader(
+            "Upload media",
+            accept_multiple_files=True,
+            key="edit_upload"
+        )
 
-    uploaded_files = st.file_uploader(
-        "Upload files",
-        accept_multiple_files=True
-    )
+        col1, col2 = st.columns(2)
 
-    if uploaded_files:
-        for file in uploaded_files:
-            with open(os.path.join(page_files_dir, file.name), "wb") as f:
-                f.write(file.getbuffer())
-        st.success("Files uploaded!")
+        with col1:
+            if st.button("Save Changes"):
+                with open(page_path, "w") as f:
+                    f.write(new_content)
 
-    st.subheader("📂 Files on this page")
+                if uploaded:
+                    for file in uploaded:
+                        with open(os.path.join(MEDIA_DIR, file.name), "wb") as f:
+                            f.write(file.getbuffer())
 
-    for filename in os.listdir(page_files_dir):
-        with open(os.path.join(page_files_dir, filename), "rb") as f:
-            st.download_button(
-                label=filename,
-                data=f,
-                file_name=filename
+                st.success("Page updated")
+
+        with col2:
+            if st.button("Delete Page"):
+                os.remove(page_path)
+                st.warning("Page deleted")
+
             )
